@@ -120,3 +120,41 @@ We will generate a Middleware specifically for that and enable that Middleware t
 ```
 php artisan make:middleware GateDefineMiddleware
 ```
+
+
+### Alternative: Spatie Permission Package
+
+```
+composer require spatie/laravel-permission
+php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+```
+
+Then, before we run the migrations, we need to remove our own ones. We don't need our own DB structure for roles/permissions, as the package will have their own migrations for this.
+
+So we delete the migrations for:
+
+- migration for roles
+- migration for permissions
+- migration for pivot permission_role table
+- column role_id from users migrations
+
+```
+php artisan migrate
+```
+
+Then we run php artisan migrate to get the package tables into our DB.
+
+Next, the Models. Again, we don't need our own models, because the package has its own Role and Permission models, with the same field "name" in the structure.
+
+
+We need to add a Trait in the User model:
+
+app/Models/User.php:
+
+```
+use Spatie\Permission\Traits\HasRoles;
+use HasApiTokens, HasFactory, Notifiable, HasRoles;
+
+```
+
+database/seeders/AdminUserSeeder.php:
