@@ -9,58 +9,114 @@
 
 ## About Laravel
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### 1. Roles and permissions
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+We will have three roles, at least:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Administrator
+Property owner
+Simple User
 
-## Learning Laravel
+Roles and Permissions in the DB
+```
+php artisan make:model Role -ms
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+```
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+Next, each role will have multiple Permissions. So let's store them in the database, too. The DB structure is identical to the Role:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```
+php artisan make:model Permission -m
+```
 
-## Laravel Sponsors
+Now, the relationship. It should be a many-to-many, because both each role may have many permissions, and also each permission may belong to many roles.
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+```
+php artisan make:migration create_permission_role_table
+```
 
-### Premium Partners
+Ok, great, we have the relationship between roles and permissions. Now, how do we assign roles or permissions to Users?
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
 
-## Contributing
+##### User: One Role or Multiple Roles?
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Typically, there are two layers of managing permissions:
 
-## Code of Conduct
+Admin adds the permissions and then specifies which roles have certain permissions
+For users, the admin/system assigns the ROLES to them, which in itself includes the permissions
+In other words, we don't assign permissions to the users, we assign only the roles.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```
+php artisan make:migration add_role_id_to_users_table
+```
 
-## Security Vulnerabilities
+```
+php artisan make:seeder AdminUserSeeder
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```
+php artisan migrate --seed
+```
 
-## License
+#### Registration API: Assign Permissions
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```
+php artisan make:controller Api/V1/Auth/RegisterController --invokable
+```
+
+#### Permissions
+```
+php artisan make:seeder PermissionSeeder
+```
+
+database/seeders/PermissionSeeder.php:
+
+```
+namespace Database\Seeders;
+ 
+use App\Models\Permission;
+use App\Models\Role;
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+ 
+class PermissionSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     *
+     * @return void
+     */
+    public function run()
+    {
+        $allRoles = Role::all()->keyBy('id');
+ 
+        $permissions = [
+            'properties-manage' => [Role::ROLE_OWNER],
+            'bookings-manage' => [Role::ROLE_USER],
+        ];
+ 
+        foreach ($permissions as $key => $roles) {
+            $permission = Permission::create(['name' => $key]);
+            foreach ($roles as $role) {
+                $allRoles[$role]->permissions()->attach($permission->id);
+            }
+        }
+    }
+}
+```
+
+```
+php artisan db:seed --class=PermissionSeeder
+```
+
+```
+php artisan make:controller Api/V1/Owner/PropertyController
+php artisan make:controller Api/V1/User/BookingController
+```
+
+We will generate a Middleware specifically for that and enable that Middleware to run on every API request.
+
+
+```
+php artisan make:middleware GateDefineMiddleware
+```
